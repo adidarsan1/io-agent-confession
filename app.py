@@ -26,6 +26,7 @@ st.markdown("<div class='sub-header'>Automated Defense-Proof Tamil Mahazar & Con
 
 # API Key Configuration
 api_key = os.getenv("GEMINI_API_KEY")
+
 with st.sidebar:
     st.title("Configuration")
     if not api_key:
@@ -34,7 +35,7 @@ with st.sidebar:
         if api_key:
             os.environ["GEMINI_API_KEY"] = api_key
             st.success("API Key set temporarily for this session.")
-    
+
     doc_type = st.radio("Select Document Type:", ("Confession Statement (Sec 27)", "Observation Mahazar"))
 
 if api_key:
@@ -44,19 +45,17 @@ if api_key:
 CONFESSION_PROMPT = """
 You are a Senior Legal Draftsman and Domain Expert for the Tamil Nadu Police.
 Your task is to take rough 'Tanglish' or colloquial Tamil police notes and generate a Defense-Proof Confession Statement (Section 27 Evidence Act) in high-level "அலுவலகத் தமிழ்" (Official Tamil) suitable for CCTNS.
-
 CRITICAL LEGAL GUARDRAILS (DEFENSE-SHIELD AUTOMATION):
 1. MANDATORY SEPARATION: You MUST strictly separate the 'Admissible Portion' from the 'Inadmissible Portion'.
    - Inadmissible Portion: Details regarding the commission of the crime (e.g., "I murdered him with a knife"). This must be documented but marked clearly as inadmissible and excluded from evidence.
    - Admissible Portion (Discovery of Fact): Information exclusively known to the accused that leads to the discovery of a fact/evidence (e.g., "I hid the knife in the bushes near the temple. If taken there, I will show it.").
-2. PREVENT FLAWS: Ensure the language implies voluntary disclosure without coercion. 
+2. PREVENT FLAWS: Ensure the language implies voluntary disclosure without coercion.
 3. FORMATTING: Structure the final output clearly with headings for "Case Context", "Inadmissible Portion (Confession of Crime)", and "Admissible Portion (Section 27 Discovery)". Formulate the text so that it aligns strictly with recent Supreme Court judgements on confessions.
 """
 
 MAHAZAR_PROMPT = """
 You are a Senior Legal Draftsman and Domain Expert for the Tamil Nadu Police.
 Your task is to take rough 'Tanglish' or colloquial Tamil crime scene notes and generate a Defense-Proof Observation Mahazar in high-level "அலுவலகத் தமிழ்" (Official Tamil) suitable for CCTNS.
-
 CRITICAL LEGAL GUARDRAILS (DEFENSE-SHIELD AUTOMATION):
 1. MANDATORY SCANNING: Scan the input for the following mandatory details:
    - Boundaries of the crime scene (Four sides: North, South, East, West).
@@ -78,13 +77,16 @@ if st.button("Generate Defense-Proof Legal Document", type="primary", use_contai
     else:
         with st.spinner(f"Generating {doc_type}... applying Legal Guardrails..."):
             try:
-                # Using Gemini system instructions
-                model = genai.GenerativeModel('gemini-1.5-pro', system_instruction=CONFESSION_PROMPT if "Confession" in doc_type else MAHAZAR_PROMPT)
+                # ✅ FIXED: Updated from deprecated 'gemini-1.5-pro' to 'gemini-2.0-flash'
+                model = genai.GenerativeModel(
+                    'gemini-2.0-flash',
+                    system_instruction=CONFESSION_PROMPT if "Confession" in doc_type else MAHAZAR_PROMPT
+                )
                 response = model.generate_content(f"USER INPUT:\n{rough_notes}")
-                
+
                 st.markdown("### 📄 Generated Official Document")
                 st.markdown(f"<div class='result-box'>{response.text}</div>", unsafe_allow_html=True)
-                
+
                 # Render download button
                 st.download_button(
                     label="Download Document as TXT",
@@ -92,7 +94,7 @@ if st.button("Generate Defense-Proof Legal Document", type="primary", use_contai
                     file_name=f"{'Confession' if 'Confession' in doc_type else 'Mahazar'}_Statement.txt",
                     mime="text/plain"
                 )
-                
+
             except Exception as e:
                 st.error(f"An error occurred during generation: {str(e)}")
 
