@@ -1,6 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
 import os
+import time
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -38,6 +39,15 @@ with st.sidebar:
 
     doc_type = st.radio("Select Document Type:", ("Confession Statement (Sec 27)", "Observation Mahazar"))
 
+    st.markdown("---")
+    st.markdown("**Model Settings**")
+    model_choice = st.selectbox(
+        "Gemini Model:",
+        ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-flash-8b"],
+        index=0,
+        help="If quota exceeded on one model, try another free model."
+    )
+
 if api_key:
     genai.configure(api_key=api_key)
 
@@ -66,8 +76,60 @@ CRITICAL LEGAL GUARDRAILS (DEFENSE-SHIELD AUTOMATION):
 3. FORMATTING: Use official structures and vocabulary for a Mahazar document.
 """
 
+
+def generate_with_retry(model_name, system_prompt, user_input, max_retries=3):
+    """Generate content with automatic retry on quota/rate limit errors."""
+    for attempt in range(max_retries):
+        try:
+            model = genai.GenerativeModel(
+                model_name,
+                system_instruction=system_prompt
+            )
+            response = model.generate_content(f"USER INPUT:\n{user_input}")
+            return response.text, None
+
+        except Exception as e:
+            error_str = str(e)
+
+            # 429 Rate limit — wait and retry
+            if "429" in error_str and "retry" in error_str.lower():
+                # Extract retry delay from error if possible
+                wait_seconds = 30
+                try:
+                    import re
+                    match = re.search(r'retry_delay\s*\{[^}]*seconds:\s*(\d+)', error_str)
+                    if match:
+                        wait_seconds = int(match.group(1)) + 5
+                except Exception:
+                    pass
+
+                if attempt < max_retries - 1:
+                    with st.spinner(f"⏳ Rate limit hit. {wait_seconds} seconds wait பண்றோம்... (Attempt {attempt + 1}/{max_retries})"):
+                        time.sleep(wait_seconds)
+                    continue
+                else:
+                    return None, "quota_exhausted"
+
+            # 429 Free tier fully exhausted (limit: 0)
+            elif "429" in error_str and ("limit: 0" in error_str or "quota" in error_str.lower()):
+                return None, "quota_exhausted"
+
+            # 404 Model not found
+            elif "404" in error_str:
+                return None, "model_not_found"
+
+            else:
+                return None, error_str
+
+    return None, "quota_exhausted"
+
+
 st.markdown("### 📝 Enter Rough Notes (Tanglish / Local Tamil)")
-rough_notes = st.text_area("Type or paste the raw information here...", height=200, placeholder="E.g., Naan avarai kathi aal kuthitten. Andha kathi-a perumal koil pinnala irukka sevuru kitta marachu vechiruken. Enna kootitu pona eduthu tharen...")
+rough_notes = st.text_area(
+    "Type or paste the raw information here...",
+    height=200,
+    placeholder="E.g., Naan avarai kathi aal kuthitten. Andha kathi-a perumal koil pinnala irukka sevuru kitta marachu vechiruken. Enna kootitu pona eduthu tharen..."
+)
 
 if st.button("Generate Defense-Proof Legal Document", type="primary", use_container_width=True):
     if not api_key:
@@ -75,28 +137,50 @@ if st.button("Generate Defense-Proof Legal Document", type="primary", use_contai
     elif not rough_notes.strip():
         st.warning("Please enter some rough notes to process.")
     else:
-        with st.spinner(f"Generating {doc_type}... applying Legal Guardrails..."):
-            try:
-                # ✅ FIXED: Updated from deprecated 'gemini-1.5-pro' to 'gemini-2.0-flash'
-                model = genai.GenerativeModel(
-                    'gemini-2.0-flash',
-                    system_instruction=CONFESSION_PROMPT if "Confession" in doc_type else MAHAZAR_PROMPT
-                )
-                response = model.generate_content(f"USER INPUT:\n{rough_notes}")
+        system_prompt = CONFESSION_PROMPT if "Confession" in doc_type else MAHAZAR_PROMPT
 
-                st.markdown("### 📄 Generated Official Document")
-                st.markdown(f"<div class='result-box'>{response.text}</div>", unsafe_allow_html=True)
+        with st.spinner(f"Generating {doc_type}... Legal Guardrails apply பண்றோம்..."):
+            result, error = generate_with_retry(model_choice, system_prompt, rough_notes)
 
-                # Render download button
-                st.download_button(
-                    label="Download Document as TXT",
-                    data=response.text,
-                    file_name=f"{'Confession' if 'Confession' in doc_type else 'Mahazar'}_Statement.txt",
-                    mime="text/plain"
-                )
+        if result:
+            st.success("✅ Document generated successfully!")
+            st.markdown("### 📄 Generated Official Document")
+            st.markdown(f"<div class='result-box'>{result}</div>", unsafe_allow_html=True)
 
-            except Exception as e:
-                st.error(f"An error occurred during generation: {str(e)}")
+            st.download_button(
+                label="📥 Download Document as TXT",
+                data=result,
+                file_name=f"{'Confession' if 'Confession' in doc_type else 'Mahazar'}_Statement.txt",
+                mime="text/plain"
+            )
+
+        elif error == "quota_exhausted":
+            st.error("🚫 Gemini API Quota Exhausted!")
+            st.markdown("""
+            ### இதை எப்படி சரி பண்றது:
+
+            **Option 1 — Billing Enable பண்ணுங்க (Recommended):**
+            1. [Google AI Studio](https://aistudio.google.com) போங்க
+            2. Settings → Billing → Enable pay-as-you-go
+            3. மிகவும் cheap — ~$0.001 per request
+
+            **Option 2 — Sidebar-ல் வேற Model Try பண்ணுங்க:**
+            - `gemini-2.0-flash-lite` (lightest, separate quota)
+            - `gemini-1.5-flash` (separate quota)
+            - `gemini-1.5-flash-8b` (most lenient free tier)
+
+            **Option 3 — நாளைக்கு Try பண்ணுங்க:**
+            - Free tier daily quota midnight-ல reset ஆகும்
+
+            **Option 4 — புதுசா API Key எடுங்க:**
+            - [Google AI Studio](https://aistudio.google.com/apikey) போய் new key create பண்ணுங்க
+            """)
+
+        elif error == "model_not_found":
+            st.error(f"❌ Model '{model_choice}' not found. Sidebar-ல் வேற model select பண்ணுங்க.")
+
+        else:
+            st.error(f"❌ Error: {error}")
 
 # Footer
 st.markdown("---")
