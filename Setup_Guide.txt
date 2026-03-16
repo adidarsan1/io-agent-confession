@@ -1,0 +1,56 @@
+# Setup Guide for IO-Assist (Automated Tamil Mahazar & Confession Generator)
+
+## Prerequisites
+- Python 3.9 or higher
+- A Google Gemini API Key
+
+## Local Setup Instructions
+
+1. **Clone the Repository**
+   If you haven't already, clone the repository to your local machine:
+   ```bash
+   git clone https://github.com/adidarsan1/io-agent-confession.git
+   cd io-agent-confession
+   ```
+
+2. **Create a Virtual Environment**
+   It is recommended to run the app in an isolated Python environment.
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On macOS/Linux
+   # or venv\Scripts\activate on Windows
+   ```
+
+3. **Install Dependencies**
+   Install the required libraries from `requirements.txt`:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Environment Variables**
+   The application requires your Gemini API key. Set it up securely:
+   - Create a file named `.env` in the root directory.
+   - Add your API key:
+     ```
+     GEMINI_API_KEY=your_actual_api_key_here
+     ```
+
+5. **Run the Application**
+   Start the Streamlit development server:
+   ```bash
+   streamlit run app.py
+   ```
+   The application will automatically open in your default web browser at `http://localhost:8501`.
+
+## Deployment Guide (Streamlit Community Cloud)
+
+1. Push your code to a public or private GitHub repository.
+2. Go to [share.streamlit.io](https://share.streamlit.io/) and log in with your GitHub account.
+3. Click "New App".
+4. Select the repository, branch, and specify `app.py` as the Main file path.
+5. **Critical**: Click on "Advanced settings" before deploying.
+6. In the "Secrets" field, add your Gemini API Key in the TOML format:
+   ```toml
+   GEMINI_API_KEY = "your_actual_api_key_here"
+   ```
+7. Click "Deploy". Your app will be live and securely hosted as a web tool!
